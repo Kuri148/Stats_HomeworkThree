@@ -1,9 +1,10 @@
 library(tidyverse)
-library(ggplot)
+library(ggplot2)
 library(sjPlot)
 library(lme4)
 library(PerformanceAnalytics)
 library(corrplot)
+library(car)
 
 Sys.setenv(LANG = "en")
 
@@ -23,39 +24,41 @@ sourceData2 <- sourceData1 %>%
   na.omit() %>%
   select(-c(listener, ns_status))
 
+sourceData3 <- sourceData %>%
+  select(-c(listener, ns_status, speaker))
+
 colMeans(sourceData2)
 
 stdev <- apply(sourceData2, 2, sd)
 stdev
 
-medi <- apply(RemovePerson, 2, median)
-medi
+median <- apply(sourceData2, 2, median)
+median
 #--------------------------------------------------------------------Assumptions
 
-# , , (3) independence of errors, ,
-# and (5) independence of independent variables
 
 # (4) normality
-hist(MainData$Comprehensibility)
-ggqqplot(MainData$Comprehensibility)
-shapiro.test(MainData$Comprehensibility)
+hist(sourceData$comprehensibility)
+qqPlot(sourceData$comprehensibility)
+shapiro.test(sourceData$comprehensibility)
 
-cor(sourceData2, use = "pairwise.complete.obs")
+plot(comprehensibility ~ eit, data=sourceData) #Not sure what to do with these
+plot(comprehensibility ~ listener, data=sourceData)
+plot(comprehensibility ~ accentedness, data=sourceData)
+
+#--------------------------------------------------------------------Correlations
+
+cor(sourceData3, use = "pairwise.complete.obs")
 testing = cor(sourceData2)
 corrplot(testing, method = 'number')
 
 compInt <- cor.test(sourceData1$comprehensibility, sourceData1$intelligibility)
-tab_model(compInt)
+compInt
 
-compSpeechRate <- cor.test(RemovePerson$Comprehensibility, RemovePerson$SpeechRate)
-compSpeechRate
+compAcc <- cor.test(sourceData1$comprehensibility, sourceData1$accentedness)
+compAcc
 
-compEIT <- cor.test(RemovePerson$Comprehensibility, RemovePerson$EIT)
-compEIT
-
-chart.Correlation(sourceData2, histogram=TRUE, pch=19) #This is fucking awesome!
-# Intelligibility, Speech Rate, EIT
-
+#-----------------------------------------------------------checking institution
 
 boxplot(comprehensibility ~ institution, data = sourceData1)
 
@@ -70,12 +73,21 @@ boxplot(comprehensibility ~ institution, data = sourceData1)
     xlab("comprehensibility") +
     ylab("accentedness"))
 
-##this graph for listener is also interesting in facet_rap
+#---------------------------------------------------------------regression model
 
-institution.lmer <- lmer(comprehensibility ~ accentedness + (1|listener), data = sourceData1)
-summary(institution.lmer)
-tab_model(institution.lmer)
+listener.lmer <- lmer(comprehensibility ~ accentedness + eit + (1|listener), data = sourceData1)
+summary(listener.lmer)
+tab_model(listener.lmer)
 
-institution.lmer <- lmer(comprehensibility ~ accentedness + eit +  (1|institution), data = sourceData1)
-summary(institution.lmer)
-tab_model(institution.lmer)
+#get list of residuals
+res <- resid(listener.lmer)
+
+plot(fitted(listener.lmer), res)
+
+#create Q-Q plot for residuals
+qqnorm(res)
+
+#add a straight diagonal line to the plot
+qqline(res)
+
+durbinWatsonTest(listener.lmer)
